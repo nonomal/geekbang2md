@@ -105,34 +105,39 @@ func main() {
 		defer func(t time.Time) { log.Printf("🍌 一共耗时: %s\n", time.Since(t)) }(time.Now())
 
 		for i := range courses {
-			var product = &courses[i]
-			log.Printf("开始下载: <%s>\n", product.Title)
+			func() {
+				var product = &courses[i]
+				log.Printf("[%d] 开始下载: <%s>\n", i, product.Title)
+				defer func(t time.Time) {
+					log.Printf("🍙 [%d] <%s> 下载完成，耗时: %s\n\n", i, product.Title, time.Since(t))
+				}(time.Now())
 
-			var err error
-			switch product.Type {
-			case api.ProductTypeVideo:
-				err = video.NewVideo(
-					product.Title,
-					product.ID,
-					product.Author.Name,
-					product.Article.Count,
-					product.Seo.Keywords,
-				).Download()
-			case api.ProductTypeZhuanlan:
-				err = zhuanlan.NewZhuanLan(
-					product.Title,
-					product.ID,
-					product.Author.Name,
-					product.Article.Count,
-					product.Seo.Keywords,
-					audio,
-				).Download()
-			default:
-				log.Printf("未知类型, %s\n", product.Type)
-			}
-			if err != nil {
-				log.Printf("下载: <%s> 出错: %v\n", product.Title, err)
-			}
+				var err error
+				switch product.Type {
+				case api.ProductTypeVideo:
+					err = video.NewVideo(
+						product.Title,
+						product.ID,
+						product.Author.Name,
+						product.Article.Count,
+						product.Seo.Keywords,
+					).Download()
+				case api.ProductTypeZhuanlan:
+					err = zhuanlan.NewZhuanLan(
+						product.Title,
+						product.ID,
+						product.Author.Name,
+						product.Article.Count,
+						product.Seo.Keywords,
+						audio,
+					).Download()
+				default:
+					log.Printf("未知类型, %s\n", product.Type)
+				}
+				if err != nil {
+					log.Printf("下载: <%s> 出错: %v\n", product.Title, err)
+				}
+			}()
 		}
 
 		var (
