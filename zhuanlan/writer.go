@@ -16,7 +16,7 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
-var imgRegexp = regexp.MustCompile(`!\[(.*?)]\((.*)\)`)
+var imgRegexp = regexp.MustCompile(`!\[(.*?)]\((.*?)\)`)
 
 type MDWriter struct {
 	title        string

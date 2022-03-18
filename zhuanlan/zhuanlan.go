@@ -65,7 +65,6 @@ func (zl *ZhuanLan) Download() error {
 	zl.mdWriter.WriteReadmeMD(bf.String())
 	articles, err := api.Articles(zl.id)
 	if err != nil {
-		log.Println(err)
 		return err
 	}
 	var pad int = 2

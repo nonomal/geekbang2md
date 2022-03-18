@@ -106,11 +106,12 @@ func main() {
 
 		for i := range courses {
 			var product = &courses[i]
-			log.Printf("开始爬取: <%s>\n", product.Title)
+			log.Printf("开始下载: <%s>\n", product.Title)
 
+			var err error
 			switch product.Type {
 			case api.ProductTypeVideo:
-				video.NewVideo(
+				err = video.NewVideo(
 					product.Title,
 					product.ID,
 					product.Author.Name,
@@ -118,7 +119,7 @@ func main() {
 					product.Seo.Keywords,
 				).Download()
 			case api.ProductTypeZhuanlan:
-				zhuanlan.NewZhuanLan(
+				err = zhuanlan.NewZhuanLan(
 					product.Title,
 					product.ID,
 					product.Author.Name,
@@ -128,6 +129,9 @@ func main() {
 				).Download()
 			default:
 				log.Printf("未知类型, %s\n", product.Type)
+			}
+			if err != nil {
+				log.Printf("下载: <%s> 出错: %v\n", product.Title, err)
 			}
 		}
 
@@ -262,7 +266,7 @@ ASK:
 	for {
 		courses = nil
 		courseID = ""
-		fmt.Printf("🍎 下载的目录是: '%s', 选择你要爬取的课程(多个用 , 隔开), 直接回车默认全部: \n", dir)
+		fmt.Printf("🍎 下载的目录是: '%s', 选择你要下载的课程(多个用 , 隔开), 直接回车默认全部: \n", dir)
 		fmt.Printf("> ")
 		fmt.Scanln(&courseID)
 		if courseID == "" {

@@ -91,9 +91,11 @@ func (v *Video) SegDownloadPath(name string) string {
 	return filepath.Join(v.baseDir, "segs", utils.FilterCharacters(name))
 }
 
-func (v *Video) DeleteSegs(segs []*Seg) error {
+func (v *Video) DeleteSegs(segs ...*Seg) error {
 	for _, seg := range segs {
-		os.Remove(seg.path)
+		if err := os.Remove(seg.path); err != nil {
+			log.Printf("remove '%s', err: %v", seg.path, err)
+		}
 	}
 	return nil
 }
@@ -101,7 +103,6 @@ func (v *Video) DeleteSegs(segs []*Seg) error {
 func (v *Video) Download() error {
 	articles, err := api.Articles(v.cid)
 	if err != nil {
-		log.Println(err)
 		return err
 	}
 
@@ -119,7 +120,7 @@ func (v *Video) Download() error {
 			//log.Printf("开始下载: %s", s.ArticleTitle)
 			err = download(v.DownloadPath(s.ArticleTitle+".ts"), vi.Hd.URL, v, s)
 			if err != nil {
-				log.Printf("下载出错: %v\n", err)
+				log.Printf("\n下载出错: %v\n", err)
 			}
 		}()
 	}
@@ -149,17 +150,23 @@ func download(path string, u string, v *Video, s *api.ArticlesResponseItem) erro
 	}
 	get, err := api.NewBackoffClient(3).Get(u)
 	if err != nil {
-		log.Fatalln(err)
+		return err
 	}
 	defer get.Body.Close()
 	keyAll, err := io.ReadAll(get.Body)
 	if err != nil {
-		log.Fatalln(err)
+		return err
 	}
 	submatch := uregex.FindStringSubmatch(string(keyAll))
-	key, _ := api.VideoKey(submatch[1], strconv.Itoa(s.ID))
+	key, err := api.VideoKey(submatch[1], strconv.Itoa(s.ID))
+	if err != nil {
+		return err
+	}
 
-	parse, _ := url.Parse(u)
+	parse, err := url.Parse(u)
+	if err != nil {
+		return err
+	}
 	baseUrl := fmt.Sprintf("https://%s/%s/", parse.Host, strings.Split(parse.Path, "/")[1])
 	res, err := api.NewBackoffClient(3).Get(u)
 	if err != nil {
@@ -220,6 +227,10 @@ func download(path string, u string, v *Video, s *api.ArticlesResponseItem) erro
 	defer f.Close()
 	sort.Sort(items)
 
+	if len(key) == 0 {
+		return fmt.Errorf("[Warning]: key 的长度为 0, 保留 segs。")
+	}
+
 	for _, item := range items {
 		file, err := os.ReadFile(item.path)
 		if err != nil {
@@ -227,9 +238,8 @@ func download(path string, u string, v *Video, s *api.ArticlesResponseItem) erro
 		}
 		aes128, err := decryptAES128(file, key, make([]byte, 16))
 		if err != nil {
-			v.DeleteSegs(items)
-			log.Printf("[ERROR]: 解码失败: %v\n", err)
-			return err
+			v.DeleteSegs(item)
+			return fmt.Errorf("[ERROR]: 解码失败: %w %s\n", err, item.path)
 		}
 		for j := 0; j < len(aes128); j++ {
 			if aes128[j] == syncByte {
@@ -241,7 +251,7 @@ func download(path string, u string, v *Video, s *api.ArticlesResponseItem) erro
 			return err
 		}
 	}
-	v.DeleteSegs(items)
+	v.DeleteSegs(items...)
 	info, _ := f.Stat()
 	log.Printf("\n[SUCCESS]: 下载成功 '%s', 大小: '%s'", s.ArticleTitle, humanize.Bytes(uint64(info.Size())))
 	return nil
@@ -256,14 +266,14 @@ func decryptAES128(crypted, key, iv []byte) (origData []byte, err error) {
 		e := recover()
 		switch edata := e.(type) {
 		case string:
-			err = errors.New(edata)
+			err = errors.New(fmt.Sprintf("%s, len key: %d", edata, len(key)))
 		case error:
-			err = edata
+			err = fmt.Errorf("%w: key len: %d", edata, len(key))
 		}
 	}()
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: key len: %d", err, len(key))
 	}
 	blockSize := block.BlockSize()
 	blockMode := cipher.NewCBCDecrypter(block, iv[:blockSize])
