@@ -15,7 +15,7 @@ type Bar struct {
 }
 
 func NewBar(title string, total int) *Bar {
-	return &Bar{title: title, total: total, b: progressbar.NewOptions(total,
+	b := &Bar{title: title, total: total + 1, b: progressbar.NewOptions(total,
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionFullWidth(),
 		progressbar.OptionSetDescription("[Download]: "+title),
@@ -27,6 +27,8 @@ func NewBar(title string, total int) *Bar {
 			BarEnd:        "]",
 		}),
 	)}
+	b.b.Add(1)
+	return b
 }
 
 func (b *Bar) Add() {

@@ -105,7 +105,6 @@ func (v *Video) Download() error {
 	if err != nil {
 		return err
 	}
-
 	for i := range articles.Data.List {
 		func() {
 			s := articles.Data.List[i]
@@ -148,38 +147,26 @@ func download(path string, u string, v *Video, s *api.ArticlesResponseItem) erro
 	if err == nil && stat.Size() > 0 {
 		return nil
 	}
-	get, err := api.NewBackoffClient(3).Get(u)
-	if err != nil {
-		return err
-	}
-	defer get.Body.Close()
-	keyAll, err := io.ReadAll(get.Body)
-	if err != nil {
-		return err
-	}
-	submatch := uregex.FindStringSubmatch(string(keyAll))
-	key, err := api.VideoKey(submatch[1], strconv.Itoa(s.ID))
-	if err != nil {
-		return err
-	}
 
 	parse, err := url.Parse(u)
 	if err != nil {
 		return err
 	}
+
+	get, err := api.NewBackoffClient(3).Get(u)
+	if err != nil {
+		return err
+	}
+	defer get.Body.Close()
+	m3u8, err := io.ReadAll(get.Body)
+	if err != nil {
+		return err
+	}
+
 	baseUrl := fmt.Sprintf("https://%s/%s/", parse.Host, strings.Split(parse.Path, "/")[1])
-	res, err := api.NewBackoffClient(3).Get(u)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	all, err := io.ReadAll(res.Body)
-	if err != nil {
-		return err
-	}
 	os.MkdirAll(v.DownloadPath("segs"), 0755)
 	var items Segs
-	stringSubmatch := tsFileRegexp.FindAllStringSubmatch(string(all), -1)
+	stringSubmatch := tsFileRegexp.FindAllStringSubmatch(string(m3u8), -1)
 	for _, s := range stringSubmatch {
 		id, _ := strconv.Atoi(s[1])
 		items = append(items, &Seg{
@@ -220,17 +207,21 @@ func download(path string, u string, v *Video, s *api.ArticlesResponseItem) erro
 	}
 
 	wg.Wait()
+	sort.Sort(items)
+
+	submatch := uregex.FindStringSubmatch(string(m3u8))
+	key, err := api.VideoKey(submatch[1], strconv.Itoa(s.ID))
+	if err != nil {
+		return err
+	}
+	if len(key) == 0 {
+		return fmt.Errorf("[Warning]: key 的长度为 0, 保留 segs。")
+	}
 	f, err := os.OpenFile(path, os.O_TRUNC|os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	sort.Sort(items)
-
-	if len(key) == 0 {
-		return fmt.Errorf("[Warning]: key 的长度为 0, 保留 segs。")
-	}
-
 	for _, item := range items {
 		file, err := os.ReadFile(item.path)
 		if err != nil {
@@ -247,6 +238,7 @@ func download(path string, u string, v *Video, s *api.ArticlesResponseItem) erro
 				break
 			}
 		}
+
 		if _, err := f.Write(aes128); err != nil {
 			return err
 		}
